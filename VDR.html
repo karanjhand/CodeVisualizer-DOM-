@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Enhanced Code Executor</title>
+  <!-- Include CodeMirror CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/material.min.css">
+  <!-- Include Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+  <!-- Custom Styles -->
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #2e2e2e;
+      color: #f1f1f1;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .cm-highlight-line {
+      background-color: rgba(255, 255, 0, 0.3); /* Light yellow highlight */
+    }
+    .container {
+      display: flex;
+      width: 100%;
+    }
+    .editor-section, .output-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+    .editor-container {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid #444;
+      height: calc(100% - 50px);
+      background-color: #1e1e1e;
+      overflow: hidden;
+    }
+    .editor-tabs {
+      display: flex;
+      background-color: #333;
+      border-bottom: 1px solid #444;
+    }
+    .tab-button {
+      padding: 10px;
+      cursor: pointer;
+      background-color: #333;
+      color: #f1f1f1;
+      border: none;
+      outline: none;
+      transition: background-color 0.3s;
+      flex: 1;
+      text-align: center;
+      position: relative;
+    }
+    .tab-button i {
+      margin-right: 5px;
+    }
+    .tab-button.active {
+      background-color: #666;
+      border-right: 2px solid #f1f1f1;
+    }
+    .tab-content {
+      display: none;
+      flex: 1;
+      overflow: auto;
+      height: calc(100% - 40px);
+    }
+    .tab-content.active {
+      display: block;
+    }
+    .CodeMirror {
+      border-top: 1px solid #444;
+      height: 100%;
+    }
+    .output-container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      background-color: #1e1e1e;
+    }
+    .output-tabs {
+      display: flex;
+      background-color: #333;
+      border-bottom: 1px solid #444;
+    }
+    .output-tab-button {
+      padding: 10px;
+      cursor: pointer;
+      background-color: #333;
+      color: #f1f1f1;
+      border: none;
+      outline: none;
+      transition: background-color 0.3s;
+      flex: 1;
+      text-align: center;
+    }
+    .output-tab-button.active {
+      background-color: #666;
+      border-right: 2px solid #f1f1f1;
+    }
+    .output-iframe {
+      width: 100%;
+      height: calc(100% - 40px);
+      border: none;
+      background-color: #fff;
+    }
+    .run-button {
+      padding: 10px;
+      margin: 10px;
+      background-color: #444;
+      color: #f1f1f1; 
+      border: none;
+      cursor: pointer;
+      transition: background-color 0.3s;
+      align-self: center;
+      flex-shrink: 0;
+    }
+    .run-button:hover {
+      background-color: #555;
+    }
+    .file-input-container {
+      display: flex;
+      justify-content: space-around;
+      padding: 10px;
+      background-color: #333;
+      border-bottom: 1px solid #444;
+    }
+    /* Resizable Panels */
+    .resizer {
+      width: 5px;
+      background-color: #444;
+      cursor: col-resize;
+    }
+    /* Spinner Styles */
+    #loadingIcon {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999; /* Ensure it overlays everything else */
+    }
+    .spinner {
+      border: 16px solid #f3f3f3; /* Light grey */
+      border-top: 16px solid #444; /* Dark grey */
+      border-radius: 50%;
+      width: 120px;
+      height: 120px;
+      animation: spin 2s linear infinite;
+    }
+    /* Animation */
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="editor-section">
+      <div class="editor-container">
+        <div class="editor-tabs">
+          <button class="tab-button active" onclick="showTab('html', 'editor', this)"><i class="fab fa-html5"></i>HTML</button>
+          <button class="tab-button" onclick="showTab('css', 'editor', this)"><i class="fab fa-css3-alt"></i>CSS</button>
+          <button class="tab-button" onclick="showTab('js', 'editor', this)"><i class="fab fa-js"></i>JavaScript</button>
+        </div>
+
+        <div class="file-input-container">
+          <!-- File Input for HTML -->
+          <input type="file" id="htmlFileInput" accept=".html" onchange="loadFileContent('html', this)">
+          <!-- File Input for CSS -->
+          <input type="file" id="cssFileInput" accept=".css" onchange="loadFileContent('css', this)">
+          <!-- File Input for JavaScript -->
+          <input type="file" id="jsFileInput" accept=".js" onchange="loadFileContent('js', this)">
+        </div>
+
+        <div id="html" class="tab-content active">
+          <textarea id="htmlCode"></textarea>
+        </div>
+        <div id="css" class="tab-content">
+          <textarea id="cssCode"></textarea>
+        </div>
+        <div id="js" class="tab-content">
+          <textarea id="jsCode"></textarea>
+        </div>
+      </div>
+      <button class="run-button" onclick="runCode()">Run Code</button>
+      <!-- <button id="highlightButton">Highlight Line 1</button>
+<button id="removeHighlightButton">Remove Highlight from Line 1</button> -->
+    </div>
+
+    <div class="resizer" id="dragMe"></div>
+
+    <div class="output-section">
+      <div class="output-container">
+        <div class="output-tabs">
+          <button class="output-tab-button active" onclick="showTab('output1', 'output', this)">Normal Output</button>
+          <button class="output-tab-button" onclick="showTab('output2', 'output', this)">Enhanced Output</button>
+        </div>
+
+        <div id="output1" class="tab-content active">
+          <iframe id="outputFrame1" class="output-iframe"></iframe>
+        </div>
+        <div id="output2" class="tab-content">
+          <iframe id="outputFrame2" class="output-iframe"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Icon -->
+  <div id="loadingIcon" style="display: none;">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Include CodeMirror JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/xml/xml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/css/css.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script>
+  <!-- Include Esprima and Escodegen for JavaScript code parsing -->
+  <!-- <script src="https://cdn.jsdelivr.net/npm/esprima@4.0.1/dist/esprima.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/escodegen/1.11.1/escodegen.browser.min.js"></script> -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+
+  <!-- Main Script -->
+  <script>
+    let htmlEditor, cssEditor, jsEditor;
+
+    window.addEventListener('load', () => {
+      initEditors();
+    });
+
+    function initEditors() {
+      htmlEditor = CodeMirror.fromTextArea(document.getElementById('htmlCode'), {
+        mode: "xml",
+        lineNumbers: true,
+        theme: "material",
+      });
+      cssEditor = CodeMirror.fromTextArea(document.getElementById('cssCode'), {
+        mode: "css",
+        lineNumbers: true,
+        theme: "material",
+      });
+      jsEditor = CodeMirror.fromTextArea(document.getElementById('jsCode'), {
+        mode: "javascript",
+        lineNumbers: true,
+        theme: "material",
+      });
+    }
+
+    function showTab(tabId, type, element) {
+      const contents = document.querySelectorAll(`.${type}-section .tab-content`);
+      const buttons = document.querySelectorAll(`.${type}-section .${type === 'editor' ? 'tab-button' : 'output-tab-button'}`);
+
+      contents.forEach(content => content.classList.remove('active'));
+      buttons.forEach(button => button.classList.remove('active'));
+
+      document.getElementById(tabId).classList.add('active');
+      element.classList.add('active');
+
+      if (type === 'editor') {
+        if (tabId === 'html') htmlEditor.refresh();
+        else if (tabId === 'css') cssEditor.refresh();
+        else if (tabId === 'js') jsEditor.refresh();
+      }
+    }
+
+    function highlightLine(editor, lineNumber) {
+      editor.addLineClass(lineNumber, "background", "cm-highlight-line");
+    }
+
+    function removeHighlight(editor, lineNumber) {
+      editor.removeLineClass(lineNumber, "background", "cm-highlight-line");
+    }
+
+    window.addEventListener('message', (event) => {
+      const data = event.data;
+      if (data && data.language && data.lines) {
+        const editor = getEditorByLanguage(data.language);
+        if (editor) {
+          highlightLines(editor, data.lines);
+        }
+      }
+    });
+
+    function getEditorByLanguage(language) {
+      switch (language.toLowerCase()) {
+        case 'html':
+          return htmlEditor;
+        case 'css':
+          return cssEditor;
+        case 'javascript':
+        case 'js':
+          return jsEditor;
+        default:
+          return null;
+      }
+    }
+
+    function highlightLines(editor, lineNumbers) {
+      // Clear previous highlights
+      clearAllHighlights(editor);
+      lineNumbers.forEach((lineNumber) => {
+        editor.addLineClass(lineNumber - 1, 'background', 'cm-highlight-line');
+      });
+    }
+
+    function clearAllHighlights(editor) {
+      editor.doc.eachLine((lineHandle) => {
+        editor.removeLineClass(lineHandle, 'background', 'cm-highlight-line');
+      });
+    }
+
+    async function runCode() {
+      // Show loading icon
+      document.getElementById('loadingIcon').style.display = 'flex';
+
+      let htmlContent = htmlEditor.getValue();
+      let cssContent = cssEditor.getValue();
+      let jsContent = jsEditor.getValue();
+      const outputPre1 = `
+        <html>
+          <head><style>${cssContent}</style></head>
+          <body>${htmlContent}<script>${jsContent}<\/script></body>
+        </html>
+      `;
+
+      async function getEnhancedWebsiteCode(htmlContent, cssContent, jsContent) {
+        // Process HTML content to add data-line-number attributes
+        function addLineNumbersToHTML(htmlCode) {
+          const lines = htmlCode.split('\n');
+          let lineNumber = -1;
+          const processedLines = lines.map(line => {
+            lineNumber++;
+            // Match opening tags
+            return line.replace(/<([a-zA-Z][^>\s]*)/, `<$1 data-line-number="${lineNumber}"`);
+          });
+          let processedHTML = processedLines.join('\n');
+
+            // New HTML content to insert
+            const newContent = `
+                <div id="padder1234"></div>
+                <div id="explanationPanel123"><h3>Explanation</h3><p>Explanation here</p</div>
+            `;
+
+            // Insert new content before the closing </body> tag
+            processedHTML = processedHTML.replace(/<\/body>/, `${newContent}\n</body>`);
+
+            return processedHTML;
+        }
+
+        // Process JavaScript content to insert displayJsLineNumber calls
+        function addDisplayJsLineNumber(jsCode) {
+  const instrumentedCode = Babel.transform(jsCode, {
+    presets: [],
+    plugins: [function myCustomPlugin(babel) {
+      const { types: t } = babel;
+      return {
+        visitor: {
+          // Instrument function bodies
+          BlockStatement(path) {
+            // Skip if already instrumented
+            if (path.node.instrumented) return;
+            path.node.instrumented = true;
+
+            const newBody = [];
+            path.node.body.forEach(statement => {
+              if (
+                statement.type !== 'FunctionDeclaration' &&
+                statement.type !== 'ClassDeclaration'
+              ) {
+                const lineNumber = statement.loc.start.line;
+
+                // Create displayJsLineNumber(lineNumber); using babel.types
+                const displayLineNode = t.expressionStatement(
+                  t.callExpression(
+                    t.identifier('displayJsLineNumber'),
+                    [t.numericLiteral(lineNumber)]
+                  )
+                );
+
+                newBody.push(displayLineNode);
+              }
+              newBody.push(statement);
+            });
+            path.node.body = newBody;
+          },
+          // Instrument top-level statements
+          Program(path) {
+            const newBody = [];
+            path.node.body.forEach(statement => {
+              if (
+                statement.type !== 'FunctionDeclaration' &&
+                statement.type !== 'ClassDeclaration'
+              ) {
+                const lineNumber = statement.loc.start.line;
+
+                // Create displayJsLineNumber(lineNumber); using babel.types
+                const displayLineNode = t.expressionStatement(
+                  t.callExpression(
+                    t.identifier('displayJsLineNumber'),
+                    [t.numericLiteral(lineNumber)]
+                  )
+                );
+
+                newBody.push(displayLineNode);
+              }
+              newBody.push(statement);
+            });
+            path.node.body = newBody;
+          }
+        }
+      };
+    }]
+  }).code;
+
+  const functionDefinition = `
+  function displayJsLineNumber(lineNumber) {
+    window.parent.postMessage({ language: 'javascript', lines: [lineNumber] }, '*');
+  }
+  `;
+
+  return functionDefinition + '\n' + instrumentedCode;
+}
+async function getExplanations(htmlContent, cssContent, jsContent) {
+        const apiKey = "";
+        try {
+        // Prepare the payload for the API
+        const payload = {
+          model: "gpt-4o-mini",
+          //model:"gpt-4o-2024-08-06",
+          messages: [
+          {
+                role: 'system',
+                content: 'You are top professor that provides explanations for HTML, css and javascript code. Return the explanations as a JSON object, where each key is the line number of the html tag(same as data-line-number), and the value is the explanation about html, js code and css accosiated with that line, output like {line:5, explanation:"Explain here"}',
+              },
+              {
+                role: 'user',
+                content: `I am beginner to programming, provide a clear explanation based on this code
+                HTML: ${htmlContent}
+                CSS: ${cssContent}
+                JavaScript: ${jsContent}
+                `
+                ,
+              },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "html_analysis",
+              schema: {
+                type: "object",
+                properties: {
+                  lines: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        line_number: { type: "integer" },
+                        explanation: { type: "string", description:`for reference here is one explanation "This tag serves the purpose of [function] ` },
+                        AssociatedCSS:{type: "string", description:`styled using [specific CSS rules or classes, e.g., '.classname' applies {property: value}] this property does [this]`},
+                        AssociatedJSCode:{type: "string", description:`explain JavaScript [specific event or functionality]. The interaction triggers [this] JavaScript code, which lead to [this] which performs [specific behavior or outcome]`}
+                      },
+                      required: ["line_number", "explanation", "AssociatedCSS", "AssociatedJSCode"],
+                      additionalProperties: false
+                    }
+                  }
+                },
+                required: ["lines"],
+                additionalProperties: false
+              },
+              strict: true
+            }
+          }
+        };
+
+        // Make the API request
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await response.json();
+
+    if (data.choices && data.choices.length > 0) {
+      const explanations = data.choices[0].message;
+      const parsedExplanations = JSON.parse(explanations.content);
+      
+      var explanationObject =[]
+      // Ensure `lines` is accessed correctly
+      if (parsedExplanations.lines && Array.isArray(parsedExplanations.lines)) {
+        parsedExplanations.lines.forEach(line => {
+            let explanationText = line.explanation;
+
+            if (line.AssociatedCSS && line.AssociatedCSS.length >= 3) {
+            explanationText += `.. Associated CSS: ${line.AssociatedCSS}`;
+            }
+
+            if (line.AssociatedJSCode && line.AssociatedJSCode.length >= 3) {
+            explanationText += `.. Associated JSCode: ${line.AssociatedJSCode}`;
+            }
+
+            explanationObject[line.line_number] = explanationText;
+        });
+      } else {
+        console.error("Lines array is missing or not in the correct format.");
+        alert("An unexpected response format was received. Please check the console for details.");
+      }
+      
+      return explanationObject;
+    } else {
+      alert("No explanations found in the response.");
+    }
+    } catch (error) {
+      console.error("Error calling the OpenAI API:", error);
+      alert("An error occurred while fetching explanations. Check the console for details.");
+      }
+    
+    }
+
+
+        // Enhanced HTML content
+        const enhancedHTML = addLineNumbersToHTML(htmlContent);
+        
+        const explanationsObject = await getExplanations(enhancedHTML, cssContent, jsContent)
+        // Enhanced JS content
+        console.log("76767bb768b  ", explanationsObject)
+        const explanationsObjectScript = `
+            <script>
+            var explanationsObject = ${JSON.stringify(explanationsObject)};
+            <\/script>
+            `;
+        const enhancedJS = addDisplayJsLineNumber(jsContent);
+
+        // JavaScript code to attach event listeners to HTML elements
+        const htmlEventListenerScript = `
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+          function attachEventListeners() {
+            document.body.addEventListener('click', function(event) {
+              const target = event.target.closest('[data-line-number]');
+              if (target) {
+                const lineNumber = target.getAttribute('data-line-number');
+                highlightElement(target);
+                window.parent.postMessage({ language: 'html', lines: [parseInt(lineNumber) + 1] }, '*');
+                
+                // Access the explanation from explanationsObject
+                const explanation = explanationsObject[parseInt(lineNumber) ];
+                if (explanation) {
+                document.querySelector('#explanationPanel123 p').innerText = explanation;
+                } else {
+                document.querySelector('#explanationPanel123 p').innerText = 'No explanation available for this element.';
+                }
+                }
+            });
+          }
+
+          function highlightElement(element) {
+            element.classList.add('highlighted');
+            setTimeout(() => {
+              element.classList.remove('highlighted');
+            }, 1000);
+          }
+
+          attachEventListeners();
+        });
+        <\/script>
+        `;
+
+        // Build the enhanced code
+        const enhancedCode = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>${cssContent}
+            #explanationPanel123 {
+                  position: fixed;
+                  bottom: 0;
+                  left: 0;
+                  width: 100%;
+                  height: 150px;
+                  background-color: #333;
+                  color: #f1f1f1;
+                  overflow-y: auto;
+                  padding: 5px;
+                  box-sizing: border-box;
+                  border-top: 1px solid #444;
+                  font-family: Arial, sans-serif;
+                  text-align: center;
+                }
+                #padder1234 {
+                    height: 150px;
+                }
+            .highlighted {
+            outline: 2px solid red;
+            transition: outline 0.3s ease-in-out;
+          }</style>
+        </head>
+        <body>
+        ${enhancedHTML}
+        ${explanationsObjectScript}
+        <script>
+        ${enhancedJS}
+        <\/script>
+        ${htmlEventListenerScript}
+        </body>
+        </html>
+        `;
+
+        return enhancedCode;
+      }
+
+      try {
+        const enhancedCode = await getEnhancedWebsiteCode(htmlContent, cssContent, jsContent);
+        
+        renderOutput('outputFrame1', outputPre1); // Render normal output
+        renderOutput('outputFrame2', enhancedCode); // Render enhanced output
+      } catch (error) {
+        console.error("Error fetching enhanced website code:", error);
+      } finally {
+        // Hide loading icon
+        document.getElementById('loadingIcon').style.display = 'none';
+      }
+    }
+
+
+    function renderOutput(iframeId, content) {
+      const iframe = document.getElementById(iframeId);
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+      iframeDoc.open();
+      iframeDoc.write(content);
+      iframeDoc.close();
+    }
+
+    function loadFileContent(type, input) {
+      const file = input.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const content = e.target.result;
+          if (type === 'html') htmlEditor.setValue(content);
+          else if (type === 'css') cssEditor.setValue(content);
+          else if (type === 'js') jsEditor.setValue(content);
+        };
+        reader.readAsText(file);
+      }
+    }
+  </script>
+</body>
+</html>
